@@ -15,6 +15,13 @@
       "when": 1791099079901,
       "tag": "0001_futuristic_randall",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791125652560,
+      "tag": "0002_old_wraith",
+      "breakpoints": true
     }
   ]
 }
