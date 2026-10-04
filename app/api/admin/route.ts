@@ -4,7 +4,7 @@ export const dynamic='force-dynamic';
 export async function GET(request:Request){
  const {user,allowed}=await adminAccess();
  const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff'};
- if(!allowed)return Response.json({message:user?'此帳號沒有管理權限':'請先使用網站擁有者帳號登入'},{status:user?403:401,headers});
+ if(!allowed)return Response.json({message:user?'此帳號沒有管理權限':'請先使用管理帳號登入'},{status:user?403:401,headers});
  try{
   const url=new URL(request.url),format=url.searchParams.get('format');
   if(format==='csv'||format==='json'){
