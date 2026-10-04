@@ -14,7 +14,7 @@ const randomHex=(bytes:number)=>hex(crypto.getRandomValues(new Uint8Array(bytes)
 const usernameKey=(value:string)=>value.toLowerCase();
 
 export const validUsername=(value:string)=>/^[A-Za-z0-9]{4,24}$/.test(value);
-export const validPassword=(value:string)=>/^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])[A-Za-z0-9]{12,64}$/.test(value);
+export const validPassword=(value:string)=>/^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{12,64}$/.test(value);
 
 async function passwordHash(password:string,salt:string,iterations:number){
   // Workers caps one Web Crypto PBKDF2 call at 100,000 iterations. Chain

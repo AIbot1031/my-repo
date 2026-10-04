@@ -28,7 +28,7 @@ async function handle(request:Request){
    let body:Record<string,unknown>;try{const parsed=JSON.parse(text);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return reply({message:'資料格式不正確'},400);body=parsed}catch{return reply({message:'資料格式不正確'},400)}
    if(path==='/api/auth/register'||path==='/api/auth/login'){
     if(text.length>4096||typeof body.username!=='string'||body.username.length>24||typeof body.password!=='string'||body.password.length>64)return reply({message:'請檢查 ID 與密碼格式。'},400);
-    if(path==='/api/auth/register'&&(!validUsername(body.username)||!validPassword(body.password)))return reply({message:'ID 需為 4–24 位英數字；密碼需為 12–64 位英數字，並包含英文大小寫與數字。'},400);
+    if(path==='/api/auth/register'&&(!validUsername(body.username)||!validPassword(body.password)))return reply({message:'ID 需為 4–24 位英數字；密碼需為 12–64 位英數字，且至少包含 1 個英文字母與 1 個數字。'},400);
     if(path==='/api/auth/login'&&!validUsername(body.username))return reply({message:'ID 或密碼不正確。'},401);
     const result=path==='/api/auth/register'?await registerAccount(request,body.username,body.password):await loginAccount(request,body.username,body.password);
     if(result.status!==200){const headers=result.status===429?{'Retry-After':String(result.retryAfter||1)}:{};return reply({message:result.message},result.status,[],headers)}
