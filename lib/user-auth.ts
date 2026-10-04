@@ -3,6 +3,7 @@ import { database } from '@/db/storage';
 const ACCOUNT_COOKIE='drink-account';
 const SESSION_SECONDS=7*24*60*60;
 const PASSWORD_ITERATIONS=600_000;
+const MAX_WEBCRYPTO_ITERATIONS=100_000;
 const WINDOW_MS=15*60*1000;
 const LIMIT=5;
 const encoder=new TextEncoder();
@@ -16,8 +17,15 @@ export const validUsername=(value:string)=>/^[A-Za-z0-9]{4,24}$/.test(value);
 export const validPassword=(value:string)=>/^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])[A-Za-z0-9]{12,64}$/.test(value);
 
 async function passwordHash(password:string,salt:string,iterations:number){
-  const key=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveBits']);
-  return new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:fromHex(salt),iterations},key,256));
+  // Workers caps one Web Crypto PBKDF2 call at 100,000 iterations. Chain
+  // bounded, domain-separated PBKDF2 stages to retain the intended total work.
+  const baseSalt=fromHex(salt);let input=encoder.encode(password),result=new Uint8Array();
+  for(let round=0;round<iterations;round+=MAX_WEBCRYPTO_ITERATIONS){
+    const stageSalt=new Uint8Array(baseSalt.length+4);stageSalt.set(baseSalt);new DataView(stageSalt.buffer).setUint32(baseSalt.length,round/MAX_WEBCRYPTO_ITERATIONS,false);
+    const key=await crypto.subtle.importKey('raw',input,'PBKDF2',false,['deriveBits']);
+    result=new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:stageSalt,iterations:Math.min(MAX_WEBCRYPTO_ITERATIONS,iterations-round)},key,256));input=result;
+  }
+  return result;
 }
 function equal(a:Uint8Array,b:Uint8Array){let diff=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a[i]||0)^(b[i]||0);return diff===0;}
 function accountToken(request:Request){return request.headers.get('cookie')?.split(';').map(s=>s.trim()).find(s=>s.startsWith(`${ACCOUNT_COOKIE}=`))?.slice(ACCOUNT_COOKIE.length+1)||'';}
@@ -75,7 +83,7 @@ export async function loginAccount(request:Request,username:string,password:stri
   const key=usernameKey(username),budget=await rateLimit(request,'login',key);
   if(!budget.allowed)return {status:429,message:'登入嘗試過多，請稍後再試。',retryAfter:budget.retryAfter} as const;
   const user=await database().prepare('SELECT id,username,password_salt,password_hash,password_iterations FROM app_users WHERE username_key = ?').bind(key).first<{id:number;username:string;password_salt:string;password_hash:string;password_iterations:number}>();
-  const safeIterations=user&&Number.isInteger(user.password_iterations)&&user.password_iterations>=100_000&&user.password_iterations<=1_000_000?user.password_iterations:PASSWORD_ITERATIONS;
+  const safeIterations=user&&Number.isInteger(user.password_iterations)&&user.password_iterations>=MAX_WEBCRYPTO_ITERATIONS&&user.password_iterations<=1_000_000&&user.password_iterations%MAX_WEBCRYPTO_ITERATIONS===0?user.password_iterations:PASSWORD_ITERATIONS;
   const salt=user?.password_salt||'00112233445566778899aabbccddeeff';
   const expected=user?.password_hash||'0000000000000000000000000000000000000000000000000000000000000000';
   const actual=await passwordHash(password,salt,safeIterations);
