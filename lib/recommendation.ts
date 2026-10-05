@@ -13,11 +13,25 @@ function tokens(text:string){
  const counts:Record<string,number>=Object.create(null);for(const t of values)counts[t]=(counts[t]||0)+1;
  return Object.fromEntries(Object.entries(counts).map(([t,n])=>[t,n*(data.idf[t]??1)]));
 }
+function parseNegativePreferences(query:string){
+ const rules:{pattern:RegExp;matches:(d:Drink)=>boolean}[]=[];
+ let positive=query;
+ const negative=/(不要|不想喝|不想要|不喝|不喜歡|不愛|避免|避開)([^，。！？、\s]{1,8})/gu;
+ for(const match of query.matchAll(negative)){
+  const target=match[2];
+  if(/奶茶/u.test(target)) rules.push({pattern:/奶茶/u,matches:d=>/奶茶/u.test(d.name)||(/乳品飲料|珍奶/u.test(d.type)&&/奶/u.test(d.name))});
+  else if(/甜/u.test(target)) rules.push({pattern:/甜/u,matches:d=>/甜|糖香|蜜香|酸甜|甜潤|甜香/u.test(String(d.attributes['風味']||d.metadata.flavor||''))});
+  else if(target.length>1) rules.push({pattern:new RegExp(target.replace(/[.*+?^${}()|[\]\\]/gu,'\\$&'),'u'),matches:d=>[d.name,d.type,String(d.metadata.flavor||''),String(d.attributes['風味']||'')].some(v=>v.includes(target))});
+  positive=positive.replace(match[0],' ');
+ }
+ return {positive:positive.trim(),rules};
+}
 export type Constraints={brand?:string;caffeine_free?:boolean;allergens?:string[];max_price?:number;min_price?:number;excluded_ids?:string[]};
 export function recommend(query:string,constraints:Constraints,history:string[]){
  const excluded=new Set(constraints.excluded_ids||[]);
- const allowed=data.drinks.filter(d=>!excluded.has(d.id)&&(!constraints.brand||d.metadata.brand===constraints.brand)&&(!constraints.caffeine_free||d.attributes['咖啡因']===false)&&!(constraints.allergens||[]).some(a=>String(d.attributes['過敏原']||'').toLowerCase().includes(a.toLowerCase()))&&(constraints.max_price==null||(d.price!=null&&d.price<=constraints.max_price))&&(constraints.min_price==null||(d.price!=null&&d.price>=constraints.min_price)));
- const q=tokens(query||'推薦'), qnorm=norm(Object.values(q));
+ const {positive,rules}=parseNegativePreferences(query);
+ const allowed=data.drinks.filter(d=>!excluded.has(d.id)&&!rules.some(rule=>rule.matches(d))&&(!constraints.brand||d.metadata.brand===constraints.brand)&&(!constraints.caffeine_free||d.attributes['咖啡因']===false)&&!(constraints.allergens||[]).some(a=>String(d.attributes['過敏原']||'').toLowerCase().includes(a.toLowerCase()))&&(constraints.max_price==null||(d.price!=null&&d.price<=constraints.max_price))&&(constraints.min_price==null||(d.price!=null&&d.price>=constraints.min_price)));
+ const q=tokens(positive||'推薦'), qnorm=norm(Object.values(q));
  const ordered=(a:{id:string;score:number},b:{id:string;score:number})=>b.score-a.score||(a.id<b.id?-1:a.id>b.id?1:0);
  const a=allowed.map(d=>({id:d.id,score:qnorm&&norms[d.id]?Object.entries(q).reduce((s,[t,v])=>s+v*(data.tfidf[d.id][t]||0),0)/(qnorm*norms[d.id]):0})).sort(ordered).slice(0,10);
  const vectors=history.map(id=>data.vectors[id]).filter(Boolean);
