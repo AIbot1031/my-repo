@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "drink-recommendation-relgt",
+  "workers_dev": true,
+  "compatibility_date": "2026-05-15",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "drink-recommendation-db",
+      "database_id": "6763ca78-ce8a-4cb6-9ab0-a3df71a07da9"
+    }
+  ]
+}

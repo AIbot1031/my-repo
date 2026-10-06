@@ -1,14 +1,38 @@
-# 今天喝什麼 — 固定網址雲端版
+# 今天喝什麼｜飲料推薦
 
-源自 drink_rec Python 專案；雲端推論部署於 Sites / Cloudflare Workers，收藏保存於 D1。
+飲料推薦網站目前部署在 Cloudflare Workers，網址：<https://drink-recommendation-relgt.rtx941031.workers.dev>。使用者可註冊、登入、依偏好取得推薦並保存收藏；推薦資料來自專案中的 Excel 匯出目錄與預先計算的圖及向量特徵。
 
-- 原 Excel 1178 飲料、18 品牌，原始特徵、價格、營養欄位與來源列。
-- A 使用匯出的相同 TF-IDF 索引；B 使用 40 輪訓練的 RelGT 向量、相同收藏平均向量與圖規則；A/B 前十候選與動態 min-max 融合。
-- 本部署不執行 PyTorch 重訓。要更新模型，需在原 Python 專案重訓、匯出向量並重新部署。
-- C 路徑停用；保留整份榜單換批與異質圖。
-- Cookie 為高熵匿名恢復碼，D1 僅存 SHA-256；API 依 Cookie 取資料，不相信客戶端 user_id。
-- 舊 32 筆收藏以識別碼雜湊保存於 server-only 資料，第一次讀取收藏時以 idempotent transaction 匯入 D1。舊 web_UUID 可用恢復功能接回，無法自動跨網域讀取舊瀏覽器資料。
-- 新收藏永久存在 D1，瀏覽器 Cookie 有效期一年，保存恢復碼可跨瀏覽器恢復。
-- lib/data 僅被伺服器匯入，未放入 public。原 SQLite 與 Excel 不受部署影響。
+## 本機開發
 
-本地驗證：TypeScript、正式 build、API 預算篩選、全榜換批、收藏去重、使用者隔離、圖互動邊、恢復碼；並與 Python 原版比對排序。
+需要 Node.js 22.13 或更新版本。
+
+```sh
+npm install
+npm run dev
+```
+
+## Cloudflare 部署
+
+先登入具備此 Worker 和 D1 權限的 Cloudflare 帳號，再執行：
+
+```sh
+npx wrangler login
+npm run deploy:cloudflare
+```
+
+Worker 與 D1 資料庫設定位於 `wrangler.jsonc`。首次設定管理後台密碼：
+
+```sh
+npm run admin:password
+```
+
+完整管理及資料備份說明請看 [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md)。
+
+## 功能概覽
+
+- 路徑 A：先套用結構化偏好限制，再以 TF-IDF 向量餘弦相似度進行檢索排序。
+- 路徑 B：使用收藏歷史、預訓練 RelGT 向量及異質圖特徵排序。
+- 異質圖頁面、整份推薦榜單換批、註冊登入、收藏與管理後台。
+- 收藏和帳號驗證資料保存在 Cloudflare D1；密碼使用雜湊驗證，不儲存明文。
+
+不要將 `.env*` 檔案、資料庫備份、Cloudflare API Token 或 Worker Secret 加入 Git。
